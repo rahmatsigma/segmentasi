@@ -68,7 +68,7 @@ def segmentasi_tunggal(image_path, path_gt=None):
     if img_bgr is None:
         return None, None, None, None
     
-    # Resize citra ke ukuran standar proposal (512x512)
+    # Resize citra ke ukuran standar (512x512)
     img_512 = cv2.resize(img_bgr, (512, 512))
     
     # Konversi ke ruang warna HSI
@@ -154,10 +154,8 @@ for kategori in KATEGORI_IKAN:
         else:
             print(f" -> Gagal membaca: {nama_file}")
 
-print("\n=======================================================")
+
 print(f"PROSES SELESAI! Total {total_terproses} gambar berhasil di-segmentasi.")
 if akumulasi_skor_akurasi:
     rata_rata_akurasi = np.mean(akumulasi_skor_akurasi)
     print(f"Rata-rata Akurasi Segmentasi Sistem Keseluruhan: {rata_rata_akurasi:.2f}%")
-print(f"Silakan cek hasilnya di dalam folder: '{PATH_OUTPUT}/'")
-print("=======================================================")
