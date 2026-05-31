@@ -8,6 +8,7 @@ PATH_DATASET_UTAMA = 'dataset/betta_fish'
 PATH_GROUND_TRUTH = 'dataset/ground_truth'
 KATEGORI_IKAN = ['halfmoon', 'double_tail', 'serit', 'plakat']
 PATH_OUTPUT = 'output_segmentasi'
+PATH_OUTPUT_HSI = 'output_hsi_visual'
 
 
 # 1. KONVERSI BGR KE HSI
@@ -37,7 +38,7 @@ def bgr_to_hsi(img):
     return hsi_img
 
 
-# 2. FUNGSI EVALUASI AKURASI SEGMENTASI (Sesuai Bab 3.6 Proposal)
+# 2. FUNGSI EVALUASI AKURASI SEGMENTASI
 def hitung_akurasi_segmentasi(mask_otomatis, path_gt):
     # Membaca citra ground truth dalam mode grayscale
     img_gt = cv2.imread(path_gt, cv2.IMREAD_GRAYSCALE)
@@ -47,11 +48,11 @@ def hitung_akurasi_segmentasi(mask_otomatis, path_gt):
     # Penyeragaman dimensi ground truth ke resolusi target 512x512
     mask_gt = cv2.resize(img_gt, (512, 512), interpolation=cv2.INTER_NEAREST)
     
-    # Binarisasi masker murni (nilai 0 atau 1) untuk perhitungan luas area
+    # Binarisasi masker murni (nilai 0 atau 1)
     _, mask_bin_otomatis = cv2.threshold(mask_otomatis, 0, 1, cv2.THRESH_BINARY)
     _, mask_bin_gt = cv2.threshold(mask_gt, 127, 1, cv2.THRESH_BINARY)
     
-    # Rumus Proposal: (Σ nilai pixel hasil segmentasi cocok / Σ nilai pixel ground truth) * 100%
+    # (Σ nilai pixel hasil segmentasi cocok / Σ nilai pixel ground truth) * 100%
     piksel_irisan = np.sum(cv2.bitwise_and(mask_bin_otomatis, mask_bin_gt))
     total_piksel_gt = np.sum(mask_bin_gt)
     
@@ -63,7 +64,7 @@ def hitung_akurasi_segmentasi(mask_otomatis, path_gt):
 
 
 # 3. PIPELINE SEGMENTASI
-def segmentasi_tunggal(image_path, path_gt=None):
+def segmentasi_tunggal(image_path, path_gt=None, kategori=None):
     img_bgr = cv2.imread(image_path)
     if img_bgr is None:
         return None, None, None, None
@@ -74,10 +75,19 @@ def segmentasi_tunggal(image_path, path_gt=None):
     # Konversi ke ruang warna HSI
     hsi_img = bgr_to_hsi(img_512)
     
-    # [MODIFIKASI UTAMA]: Downscale untuk proses clustering (128x128) guna optimasi komputasi
+    if kategori is not None:
+        folder_simpan_hsi = os.path.join(PATH_OUTPUT_HSI, kategori)
+        if not os.path.exists(folder_simpan_hsi):
+            os.makedirs(folder_simpan_hsi)
+            
+        hsi_untuk_dicetak = (hsi_img * 255).astype(np.uint8)
+        nama_file_asli = os.path.basename(image_path)
+        path_simpan_gambar_hsi = os.path.join(folder_simpan_hsi, f"HSI_Visual_{nama_file_asli}")
+        
+        cv2.imwrite(path_simpan_gambar_hsi, hsi_untuk_dicetak)
+    
     hsi_small = cv2.resize(hsi_img, (128, 128), interpolation=cv2.INTER_AREA)
     
-    # Fitur warna: Hue dan Saturation
     fitur_warna = hsi_small[:, :, :2] 
     X = fitur_warna.reshape((-1, 2))
     
@@ -88,20 +98,19 @@ def segmentasi_tunggal(image_path, path_gt=None):
     # Label ke matriks 2D (128x128)
     labels_2d = labels.reshape((128, 128))
     
-    # Deteksi Background (Cluster paling dominan/luas adalah background)
+    # Deteksi Background
     unik, hitung = np.unique(labels_2d, return_counts=True)
     background_label = unik[np.argmax(hitung)]
     
-    # Binary Mask (0 untuk background, 1 untuk objek ikan)
+    # Binary Mask
     mask_small = np.where(labels_2d == background_label, 0, 1).astype(np.uint8)
     
-    # [UPSCALE]: Kembalikan ukuran mask ke resolusi asli proposal (512x512)
+    # Resize mask ke resolusi 512x512
     mask_512 = cv2.resize(mask_small, (512, 512), interpolation=cv2.INTER_NEAREST)
     
     # Potong objek ikan menggunakan mask biner
     hasil_segmentasi = cv2.bitwise_and(img_512, img_512, mask=mask_512)
     
-    # Jalankan evaluasi metrik apabila file ground truth tersedia
     skor_evaluasi = None
     if path_gt and os.path.exists(path_gt):
         skor_evaluasi = hitung_akurasi_segmentasi(mask_512, path_gt)
@@ -138,24 +147,23 @@ for kategori in KATEGORI_IKAN:
         path_file_gambar = os.path.join(folder_sumber, nama_file)
         path_file_gt = os.path.join(folder_gt, nama_file)
         
-        asli, mask, hasil, akurasi = segmentasi_tunggal(path_file_gambar, path_file_gt)
+        asli, mask, hasil, akurasi = segmentasi_tunggal(path_file_gambar, path_file_gt, kategori)
         
         if hasil is not None:
             path_simpan = os.path.join(folder_tujuan, f"segmented_{nama_file}")
             cv2.imwrite(path_simpan, hasil)
             total_terproses += 1
             
-            # Tampilkan informasi evaluasi jika masker acuan manual ada
+            # informasi evaluasi
             if akurasi is not None:
                 print(f" -> Berhasil memproses: {nama_file} | Skor Akurasi: {akurasi:.2f}%")
                 akumulasi_skor_akurasi.append(akurasi)
             else:
-                print(f" -> Berhasil memproses: {nama_file} | (Ground truth tidak ditemukan, skip evaluasi)")
+                print(f" -> Berhasil memproses: {nama_file}")
         else:
             print(f" -> Gagal membaca: {nama_file}")
 
 
-print(f"PROSES SELESAI! Total {total_terproses} gambar berhasil di-segmentasi.")
 if akumulasi_skor_akurasi:
     rata_rata_akurasi = np.mean(akumulasi_skor_akurasi)
     print(f"Rata-rata Akurasi Segmentasi Sistem Keseluruhan: {rata_rata_akurasi:.2f}%")
