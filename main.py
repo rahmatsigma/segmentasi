@@ -7,8 +7,8 @@ from sklearn.cluster import DBSCAN
 PATH_DATASET_UTAMA = 'dataset/betta_fish'
 PATH_GROUND_TRUTH = 'dataset/ground_truth'
 KATEGORI_IKAN = ['halfmoon', 'double_tail', 'serit', 'plakat']
-PATH_OUTPUT = 'output_segmentasi'
-PATH_OUTPUT_HSI = 'output_hsi_visual'
+PATH_OUTPUT = 'output/output_0,02_30'
+PATH_OUTPUT_HSI = 'output/output_0,02_30'
 
 
 # 1. KONVERSI BGR KE HSI
@@ -92,7 +92,7 @@ def segmentasi_tunggal(image_path, path_gt=None, kategori=None):
     X = fitur_warna.reshape((-1, 2))
     
     # DBSCAN
-    dbscan = DBSCAN(eps=0.03, min_samples=30)
+    dbscan = DBSCAN(eps=0.02, min_samples=30)
     labels = dbscan.fit_predict(X)
     
     # Label ke matriks 2D (128x128)
